@@ -1,0 +1,37 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Android Log Analyzer</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+
+<header>Android Log Analyzer</header>
+
+<section class="card">
+  <input type="file" id="logFile" multiple>
+  <button id="analyzeBtn">Analyze</button>
+</section>
+
+<section class="card">
+  <h3>Error Timeline Heatmap</h3>
+  <canvas id="timelineHeatmap"></canvas>
+</section>
+
+<section class="card">
+  <h3>Module-wise Error Heatmap</h3>
+  <canvas id="moduleHeatmap"></canvas>
+</section>
+
+<section class="card">
+  <h3>Error Details</h3>
+  <input id="searchBox" placeholder="Search logs...">
+  <pre id="logOutput"></pre>
+</section>
+
+<script type="module" src="js/main.js"></script>
+</body>
+</html>

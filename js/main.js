@@ -1,35 +1,38 @@
+import { parseLogs } from './parser.js';
+import { renderTimelineHeatmap } from './heatmap.js';
+import { renderModuleHeatmap } from './moduleHeatmap.js';
+import { renderLogs } from './ui.js';
 
-import { parseFile } from "./parser.js";
-import { renderErrorChart } from "./charts.js";
-import { renderTimelineHeatmap } from "./heatmap.js";
-import { renderModuleHeatmap } from "./moduleHeatmap.js";
-import { renderCrashCorrelation } from "./correlation.js";
-import { renderGroupedCrashes } from "./ui.js";
-import { state } from "./state.js";
+document.addEventListener("DOMContentLoaded", () => {
+  const analyzeBtn = document.getElementById("analyzeBtn");
+  const fileInput = document.getElementById("logFile");
+  const searchBox = document.getElementById("searchBox");
 
-document.getElementById("analyzeBtn").onclick = () => {
-  Object.assign(state.errorCounts, { Crash:0, ANR:0, StageNow:0 });
-  state.timelineBuckets = {};
-  state.timelineLogs = {};
-  state.moduleHeatmap = {};
-  state.crashCorrelations = [];
-  state.crashGroups = {};
+  if (!analyzeBtn) {
+    console.error("Analyze button not found");
+    return;
+  }
 
-  const files = document.getElementById("logFile").files;
-  let done = 0;
+  // --- Handle Analyze click ---
+  analyzeBtn.addEventListener("click", async () => {
+    if (!fileInput.files.length) {
+      alert("Please select one or more log files");
+      return;
+    }
 
-  [...files].forEach(f => {
-    const r = new FileReader();
-    r.onload = e => {
-      parseFile(f, e.target.result);
-      if (++done === files.length) {
-        renderErrorChart();
-        renderTimelineHeatmap();
-        renderModuleHeatmap();
-        renderCrashCorrelation();
-        renderGroupedCrashes();
-      }
-    };
-    r.readAsText(f);
+    for (const file of fileInput.files) {
+      const text = await file.text();
+      parseLogs(text);
+    }
+
+    // Render charts and logs
+    renderTimelineHeatmap();
+    renderModuleHeatmap();
+    renderLogs();
   });
-};
+
+  // --- Search box filter ---
+  searchBox.addEventListener("input", e => {
+    renderLogs(e.target.value);
+  });
+});

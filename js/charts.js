@@ -11,3 +11,4 @@ export function renderBar(canvasId, labels, data) {
     options: { responsive: true }
   });
 }
+

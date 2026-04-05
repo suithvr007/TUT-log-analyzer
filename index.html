@@ -1,37 +1,391 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8" />
-  <title>Android Log Analyzer</title>
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-  <link rel="stylesheet" href="css/style.css">
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>RF Test Analyser</title>
+<style>
+  :root {
+    --bg: #f0f2f5;
+    --card: #ffffff;
+    --border: #e2e6ea;
+    --text: #1a1a2e;
+    --muted: #6b7280;
+    --accent: #2563eb;
+    --header-bg: #1e1e2e;
+    --header-fg: #ffffff;
+    --pass: #16a34a;
+    --fail: #dc2626;
+    --radius: 10px;
+    --shadow: 0 1px 4px rgba(0,0,0,0.08);
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: 'Segoe UI', system-ui, sans-serif; background: var(--bg); color: var(--text); min-height: 100vh; }
+
+  /* Header */
+  header { background: var(--header-bg); color: var(--header-fg); padding: 0 24px; height: 54px; display: flex; align-items: center; gap: 10px; }
+  header svg { width: 22px; height: 22px; flex-shrink: 0; }
+  header h1 { font-size: 16px; font-weight: 600; letter-spacing: 0.01em; }
+
+  /* Upload zone */
+  #upload-zone {
+    margin: 28px auto; max-width: 860px; padding: 0 16px;
+  }
+  #dropzone {
+    border: 2px dashed #93c5fd;
+    border-radius: var(--radius);
+    background: #eff6ff;
+    padding: 40px 24px;
+    text-align: center;
+    cursor: pointer;
+    transition: background 0.15s, border-color 0.15s;
+  }
+  #dropzone.drag { background: #dbeafe; border-color: var(--accent); }
+  #dropzone svg { width: 40px; height: 40px; color: #93c5fd; margin-bottom: 12px; }
+  #dropzone p.main { font-size: 15px; font-weight: 600; color: var(--accent); margin-bottom: 4px; }
+  #dropzone p.sub { font-size: 13px; color: var(--muted); }
+  #dropzone input { display: none; }
+  #browse-btn {
+    margin-top: 14px;
+    display: inline-block;
+    background: var(--accent);
+    color: white;
+    font-size: 13px;
+    font-weight: 500;
+    padding: 8px 20px;
+    border-radius: 6px;
+    cursor: pointer;
+    border: none;
+    transition: background 0.15s;
+  }
+  #browse-btn:hover { background: #1d4ed8; }
+
+  #error-msg { display: none; margin: 0 auto 16px; max-width: 860px; padding: 0 16px; }
+  #error-msg div { background: #fef2f2; border: 1px solid #fca5a5; color: #991b1b; border-radius: 8px; padding: 10px 14px; font-size: 13px; }
+
+  /* Results */
+  #results { display: none; max-width: 860px; margin: 0 auto; padding: 0 16px 40px; }
+
+  /* File info bar */
+  #file-bar { display: flex; align-items: center; justify-content: space-between; margin-bottom: 16px; }
+  #file-name { font-size: 13px; color: var(--muted); font-family: monospace; }
+  #reset-btn { font-size: 12px; padding: 4px 12px; border-radius: 6px; border: 1px solid var(--border); background: var(--card); color: var(--muted); cursor: pointer; }
+  #reset-btn:hover { background: var(--bg); }
+
+  /* Summary cards */
+  #summary { display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: 10px; margin-bottom: 16px; }
+  .stat-card { background: var(--card); border: 1px solid var(--border); border-radius: var(--radius); padding: 14px 16px; box-shadow: var(--shadow); }
+  .stat-card .val { font-size: 26px; font-weight: 700; line-height: 1; }
+  .stat-card .lbl { font-size: 12px; color: var(--muted); margin-top: 4px; }
+  .stat-card.pass .val { color: var(--pass); }
+  .stat-card.fail .val { color: var(--fail); }
+  .stat-card.cat .val { color: var(--accent); }
+
+  /* Pass rate bar */
+  #pass-bar-card { background: var(--card); border: 1px solid var(--border); border-radius: var(--radius); padding: 14px 16px; margin-bottom: 16px; box-shadow: var(--shadow); }
+  #pass-bar-card .bar-label { font-size: 12px; color: var(--muted); margin-bottom: 6px; display: flex; justify-content: space-between; }
+  #bar-track { background: #fee2e2; border-radius: 99px; height: 10px; overflow: hidden; }
+  #bar-fill { background: linear-gradient(90deg, #16a34a, #22c55e); height: 100%; border-radius: 99px; transition: width 0.6s ease; }
+
+  /* Filter */
+  #filter-bar { display: flex; align-items: center; gap: 10px; margin-bottom: 14px; }
+  #filter-bar label { font-size: 13px; color: var(--muted); }
+  #filter-select { font-size: 13px; padding: 5px 10px; border-radius: 6px; border: 1px solid var(--border); background: var(--card); color: var(--text); cursor: pointer; }
+
+  /* Sections */
+  .section { border-radius: var(--radius); overflow: hidden; border: 1px solid var(--border); margin-bottom: 10px; box-shadow: var(--shadow); }
+  .section-header { display: flex; align-items: center; gap: 10px; padding: 12px 16px; cursor: pointer; user-select: none; color: white; }
+  .section-header:hover { filter: brightness(1.05); }
+  .section-title { font-size: 14px; font-weight: 600; flex: 1; }
+  .section-count { font-size: 12px; background: rgba(255,255,255,0.2); padding: 2px 10px; border-radius: 99px; }
+  .section-arrow { font-size: 12px; transition: transform 0.2s; }
+  .section-arrow.open { transform: rotate(90deg); }
+  .section-body { background: var(--card); display: none; }
+  .section-body.open { display: block; }
+
+  /* Fix box */
+  .fix-box { margin: 12px 14px; padding: 10px 14px; border-radius: 8px; border-left: 4px solid; font-size: 13px; line-height: 1.65; }
+  .fix-box strong { display: block; font-size: 12px; margin-bottom: 4px; }
+
+  /* Test rows */
+  .test-list { padding: 0 14px 10px; }
+  .test-row { border-radius: 6px; border: 1px solid var(--border); margin-bottom: 6px; overflow: hidden; }
+  .test-row-header { display: flex; align-items: flex-start; gap: 8px; padding: 8px 10px; cursor: pointer; background: #fafafa; transition: background 0.1s; }
+  .test-row-header:hover { background: #f3f4f6; }
+  .test-x { font-size: 11px; flex-shrink: 0; margin-top: 2px; }
+  .test-name { font-size: 12px; font-family: 'Consolas', monospace; flex: 1; line-height: 1.5; color: #333; }
+  .test-toggle { font-size: 11px; color: var(--accent); flex-shrink: 0; margin-top: 2px; }
+  .test-msg { display: none; font-family: 'Consolas', monospace; font-size: 11.5px; background: #f5f5f5; color: #444; padding: 8px 12px; border-top: 1px solid var(--border); white-space: pre-wrap; word-break: break-word; line-height: 1.6; }
+  .test-msg.open { display: block; }
+
+  /* All passed */
+  #all-passed { display: none; text-align: center; padding: 40px; background: var(--card); border-radius: var(--radius); border: 1px solid #bbf7d0; color: var(--pass); font-size: 15px; font-weight: 600; }
+
+  /* Footer */
+  footer { text-align: center; padding: 20px; font-size: 12px; color: #aaa; }
+  footer a { color: #93c5fd; text-decoration: none; }
+</style>
 </head>
 <body>
 
-<header>Android Log Analyzer</header>
+<header>
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/>
+    <line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/>
+  </svg>
+  <h1>Robot Framework Test Analyser</h1>
+</header>
 
-<section class="card">
-  <input type="file" id="logFile" multiple>
-  <button id="analyzeBtn">Analyze</button>
-</section>
+<div id="upload-zone">
+  <div id="dropzone">
+    <svg viewBox="0 0 24 24" fill="none" stroke="#93c5fd" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/>
+    </svg>
+    <p class="main">Drop your output.xml here</p>
+    <p class="sub">Robot Framework XML result file</p>
+    <button id="browse-btn">Browse file</button>
+    <input type="file" id="file-input" accept=".xml">
+  </div>
+</div>
 
-<section class="card">
-  <h3>Error Timeline Heatmap</h3>
-  <canvas id="timelineHeatmap"></canvas>
-</section>
+<div id="error-msg"><div id="error-text"></div></div>
 
-<section class="card">
-  <h3>Module-wise Error Heatmap</h3>
-  <canvas id="moduleHeatmap"></canvas>
-</section>
+<div id="results">
+  <div id="file-bar">
+    <span id="file-name"></span>
+    <button id="reset-btn">↩ Upload new file</button>
+  </div>
+  <div id="summary">
+    <div class="stat-card"><div class="val" id="s-total">—</div><div class="lbl">Total tests</div></div>
+    <div class="stat-card pass"><div class="val" id="s-passed">—</div><div class="lbl">Passed</div></div>
+    <div class="stat-card fail"><div class="val" id="s-failed">—</div><div class="lbl">Failed</div></div>
+    <div class="stat-card cat"><div class="val" id="s-cats">—</div><div class="lbl">Failure categories</div></div>
+  </div>
+  <div id="pass-bar-card">
+    <div class="bar-label"><span>Pass rate</span><span id="bar-pct">0%</span></div>
+    <div id="bar-track"><div id="bar-fill" style="width:0%"></div></div>
+  </div>
+  <div id="filter-bar">
+    <label for="filter-select">Filter by category:</label>
+    <select id="filter-select"></select>
+  </div>
+  <div id="sections-container"></div>
+  <div id="all-passed">✓ All tests passed!</div>
+</div>
 
-<section class="card">
-  <h3>Error Details</h3>
-  <input id="searchBox" placeholder="Search logs...">
-  <pre id="logOutput"></pre>
-</section>
+<footer>RF Test Analyser &nbsp;·&nbsp; <a href="https://github.com" target="_blank">Host on GitHub Pages</a> — no server required</footer>
 
-<script type="module" src="js/main.js"></script>
+<script>
+const PATTERNS = [
+  { re: /UiObjectNotFoundError|UiObjectNotFoundException|UI object identification failed/i,
+    category: "UI Element Not Found", color: "#c0392b",
+    fix: "The UI element could not be located on screen. Check if the Android UI layout has changed, verify element selectors (text, resourceId, className), and ensure the device is in the expected state before the test runs. Add explicit waits before element interactions." },
+  { re: /ValueError.*int|str.*cannot be interpreted as an integer|TypeError.*'str' object cannot/i,
+    category: "Type Error (str/int mismatch)", color: "#d35400",
+    fix: "A string is being passed where an integer is expected. Add explicit int() conversion in the keyword/library code. Check test data and variable bindings for unexpected string types — often a shared utility function is the root cause." },
+  { re: /No keyword with name|keyword.*not found/i,
+    category: "Missing Keyword", color: "#6c3483",
+    fix: "A keyword referenced in the test does not exist or is not imported. Check for typos in the keyword name (e.g. 'on A14' vs 'in A14'), verify the correct library/resource file is imported, and ensure the keyword is defined in the correct scope." },
+  { re: /ADB command failed|adb.*forward|Could not get display/i,
+    category: "ADB / Device Error", color: "#1a5276",
+    fix: "An ADB command failed due to device connectivity or port issues. Ensure the device is connected and authorised, check USB/network connection, and verify no port conflicts. Re-running setup may resolve transient issues." },
+  { re: /screen saver is not|Navigation Mode is not available|Variable.*not found/i,
+    category: "Device State / Config Mismatch", color: "#1e5631",
+    fix: "The device is not in the expected state or a configuration/variable is missing. Verify device settings match test preconditions, check variable definitions in resource files, and confirm the feature is supported on this device/OS version." },
+  { re: /Connection aborted|RemoteDisconnected|Remote end closed/i,
+    category: "Network / Remote Disconnect", color: "#7b241c",
+    fix: "The remote connection dropped during the test. Check network stability, device health, and consider adding retry logic or increasing timeout values." },
+  { re: /Setup failed|teardown failed/i,
+    category: "Setup / Teardown Failure", color: "#922b5e",
+    fix: "The test setup or teardown step failed before the actual test could run. Fix the underlying setup issue first — other failures in the same test may be secondary. Check device readiness and precondition steps." },
+  { re: /LightDoze mode=\s*$|doze mode/i,
+    category: "Power State Error", color: "#4a4a4a",
+    fix: "The device did not enter the expected power/doze state. Verify device power management settings, check for OEM customisations, and confirm the correct OEMConfig keys are applied." },
+];
+const UNKNOWN = { category: "General / Unknown Failure", color: "#555555",
+  fix: "No specific pattern matched. Review the full test log for the root cause. Check recent code or config changes that may have affected this test." };
+
+function classify(msg) {
+  for (const p of PATTERNS) if (p.re.test(msg)) return p;
+  return UNKNOWN;
+}
+
+function parseXML(text) {
+  const doc = new DOMParser().parseFromString(text, "text/xml");
+  const passed = [], failed = [];
+  doc.querySelectorAll("test").forEach(test => {
+    const status = [...test.children].find(c => c.tagName === "status");
+    if (!status) return;
+    const st = status.getAttribute("status");
+    const name = test.getAttribute("name") || "unnamed";
+    const msg = (status.getAttribute("message") || status.textContent || "").trim();
+    if (st === "FAIL") failed.push({ name, msg, pattern: classify(msg) });
+    else passed.push({ name });
+  });
+  return { passed, failed };
+}
+
+function hexToRgba(hex, a) {
+  const r = parseInt(hex.slice(1,3),16), g = parseInt(hex.slice(3,5),16), b = parseInt(hex.slice(5,7),16);
+  return `rgba(${r},${g},${b},${a})`;
+}
+
+let grouped = {};
+
+function renderSections(data) {
+  const container = document.getElementById("sections-container");
+  const allPassed = document.getElementById("all-passed");
+  container.innerHTML = "";
+
+  if (!Object.keys(data).length) {
+    allPassed.style.display = "block";
+    return;
+  }
+  allPassed.style.display = "none";
+
+  let firstOpen = true;
+  for (const [cat, tests] of Object.entries(data)) {
+    const p = tests[0].pattern;
+    const sec = document.createElement("div");
+    sec.className = "section";
+
+    const header = document.createElement("div");
+    header.className = "section-header";
+    header.style.background = p.color;
+    header.innerHTML = `
+      <span class="section-title">${cat}</span>
+      <span class="section-count">${tests.length} test${tests.length !== 1 ? "s" : ""}</span>
+      <span class="section-arrow${firstOpen ? " open" : ""}">▶</span>`;
+
+    const body = document.createElement("div");
+    body.className = "section-body" + (firstOpen ? " open" : "");
+
+    // Fix box
+    const fixBox = document.createElement("div");
+    fixBox.className = "fix-box";
+    fixBox.style.cssText = `background:${hexToRgba(p.color, 0.07)};border-color:${p.color}`;
+    fixBox.innerHTML = `<strong style="color:${p.color}">Suggested fix</strong>${p.fix}`;
+    body.appendChild(fixBox);
+
+    // Test list
+    const list = document.createElement("div");
+    list.className = "test-list";
+    tests.forEach(t => {
+      const row = document.createElement("div");
+      row.className = "test-row";
+      const rowHeader = document.createElement("div");
+      rowHeader.className = "test-row-header";
+      rowHeader.innerHTML = `
+        <span class="test-x" style="color:${p.color}">✕</span>
+        <span class="test-name">${t.name}</span>
+        <span class="test-toggle">details ▾</span>`;
+      const msgDiv = document.createElement("div");
+      msgDiv.className = "test-msg";
+      msgDiv.textContent = t.msg || "(no error message)";
+      rowHeader.onclick = () => {
+        const open = msgDiv.classList.toggle("open");
+        rowHeader.querySelector(".test-toggle").textContent = open ? "hide ▴" : "details ▾";
+      };
+      row.appendChild(rowHeader);
+      row.appendChild(msgDiv);
+      list.appendChild(row);
+    });
+    body.appendChild(list);
+
+    header.onclick = () => {
+      const arrow = header.querySelector(".section-arrow");
+      arrow.classList.toggle("open");
+      body.classList.toggle("open");
+    };
+
+    sec.appendChild(header);
+    sec.appendChild(body);
+    container.appendChild(sec);
+    firstOpen = false;
+  }
+}
+
+function buildGrouped(failed) {
+  const g = {};
+  failed.forEach(f => {
+    const cat = f.pattern.category;
+    if (!g[cat]) g[cat] = [];
+    g[cat].push(f);
+  });
+  return g;
+}
+
+function showResults(filename, passed, failed) {
+  document.getElementById("upload-zone").style.display = "none";
+  document.getElementById("results").style.display = "block";
+  document.getElementById("file-name").textContent = filename;
+
+  const total = passed.length + failed.length;
+  const pct = total ? Math.round(passed.length / total * 100) : 0;
+  document.getElementById("s-total").textContent = total;
+  document.getElementById("s-passed").textContent = passed.length;
+  document.getElementById("s-failed").textContent = failed.length;
+
+  grouped = buildGrouped(failed);
+  document.getElementById("s-cats").textContent = Object.keys(grouped).length;
+  document.getElementById("bar-pct").textContent = pct + "%";
+  document.getElementById("bar-fill").style.width = pct + "%";
+
+  // Filter dropdown
+  const sel = document.getElementById("filter-select");
+  sel.innerHTML = '<option value="all">All categories</option>';
+  Object.keys(grouped).forEach(cat => {
+    const opt = document.createElement("option");
+    opt.value = cat; opt.textContent = `${cat} (${grouped[cat].length})`;
+    sel.appendChild(opt);
+  });
+  sel.onchange = () => {
+    const v = sel.value;
+    renderSections(v === "all" ? grouped : { [v]: grouped[v] });
+  };
+
+  renderSections(grouped);
+}
+
+function handleFile(file) {
+  if (!file) return;
+  if (!file.name.endsWith(".xml")) {
+    showError("Please select a Robot Framework XML output file (.xml)");
+    return;
+  }
+  const reader = new FileReader();
+  reader.onload = e => {
+    try {
+      const { passed, failed } = parseXML(e.target.result);
+      if (!passed.length && !failed.length) {
+        showError("No test results found. Make sure this is a Robot Framework output.xml file.");
+        return;
+      }
+      hideError();
+      showResults(file.name, passed, failed);
+    } catch (err) {
+      showError("Failed to parse XML: " + err.message);
+    }
+  };
+  reader.readAsText(file);
+}
+
+function showError(msg) { document.getElementById("error-msg").style.display = "block"; document.getElementById("error-text").textContent = msg; }
+function hideError() { document.getElementById("error-msg").style.display = "none"; }
+
+// Wire up upload
+document.getElementById("browse-btn").onclick = () => document.getElementById("file-input").click();
+document.getElementById("file-input").onchange = e => handleFile(e.target.files[0]);
+document.getElementById("reset-btn").onclick = () => {
+  document.getElementById("upload-zone").style.display = "block";
+  document.getElementById("results").style.display = "none";
+  document.getElementById("file-input").value = "";
+};
+
+const dz = document.getElementById("dropzone");
+dz.ondragover = e => { e.preventDefault(); dz.classList.add("drag"); };
+dz.ondragleave = () => dz.classList.remove("drag");
+dz.ondrop = e => { e.preventDefault(); dz.classList.remove("drag"); handleFile(e.dataTransfer.files[0]); };
+</script>
 </body>
 </html>
